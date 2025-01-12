@@ -1,0 +1,256 @@
+import pygame
+from subroutines import * #importing everything from the subroutines file
+from enemeis import * #importing everything from enemies file
+import time
+
+# Main code
+
+pygame.init() #initiliasing the pygame module
+screen = pygame.display.set_mode((800, 600)) #creating the window that everything will use
+pygame.display.set_caption('Main Menu') #setting window name
+run=True
+townWindowOpen=False
+mainMenu=True
+fps=35                  #setting the frame rate
+time=pygame.time.Clock()    #setting a clock to ensure game runs smoothly
+font=pygame.font.SysFont('monospace',24)    #setting font type
+titleFont=pygame.font.SysFont('Arial',50)   #setting font type for title
+# waypoints
+wayPoints = [(0,300),(400, 300),(700,300),(750,300)]
+
+#loading enemy
+goblinImage= pygame.image.load('goblin1.png')
+
+# waves for the enemeis to spawn
+waves = [['g']]
+
+#creating groups
+enemyGroup=pygame.sprite.Group() #Group for enemies
+towerGroup = pygame.sprite.Group()  # Group for placed towers
+projectileGroup=pygame.sprite.Group() #Group for projectiles
+
+#timer
+lastSpawn=pygame.time.get_ticks()
+
+#loading map
+northMapImage =pygame.image.load('Tower defence north side.png') #loading map image
+northMap=Map(northMapImage,screen)
+townEntrance=TownEntrance()
+towerTile=pygame.image.load('7.png')
+treeImage=pygame.image.load('tree(1).png') #loading obstruction image
+treeImage=pygame.transform.scale(treeImage,(100,100))
+townImage=pygame.image.load('town.png')
+
+#loading projectile images
+arrowImage=pygame.image.load('arrow.png')
+
+#tower images
+archerTowerImage=pygame.image.load('archer_level_1.png')  #archer tower
+archerTowerImage=pygame.transform.scale(archerTowerImage, (100, 100))
+wizardTowerImage=pygame.image.load('wizard_level_1.png') #wizard tower
+wizardTowerImage=pygame.transform.scale(wizardTowerImage,(100,100))
+knightTowerImage=pygame.image.load('barrack_level_1 (1).png') #knight tower
+knightTowerImage=pygame.transform.scale(knightTowerImage,(100,100))
+selectedTower = None
+
+#tower tiles
+towerTiles=[(1,0),(6,1),(7,4),(1,4),(6,4),(7,1)]
+obstructedTiles=[(1,1),(2,1),(3,2),(5,0),(4,4),(2,5)]
+takenTiles=[]
+
+#town management variables
+buildMenuActive=False
+towerMenuOpen=False
+selectedBuilding = None
+buildingImage = None
+placingBuilding = False
+placedBuildings = []
+
+
+#game state's
+towerDefence=1
+townManagement=2
+mainMenu=3
+gameState=mainMenu
+
+#main game loop
+while run:
+    screen.fill((255, 255, 255))  # fills the screen with white
+    time.tick(fps)                # setting frame rate
+
+    #event loop
+    events = pygame.event.get()
+    for event in  events:  #making the X work on window
+
+        if event.type == pygame.QUIT:
+            run = False
+
+
+
+        if gameState==towerDefence:
+            #Tower placement tile logic
+            if event.type == pygame.MOUSEBUTTONDOWN and event.button == 1:
+                mousePos = pygame.mouse.get_pos()
+
+                tilex = (mousePos[0] // 100) * 100
+                tiley = (mousePos[1] // 100) * 100
+                clickedTile = (tilex // 100, tiley // 100)  #converting to tile based coordinates
+                # offsets
+                xOffset = -20
+                yOffset = 0
+
+
+
+                if clickedTile in towerTiles and clickedTile not in takenTiles:
+                    selectedTower = towerPlacementMenu(screen, font, events, towerMenuOpen)  # open the menu
+
+
+
+                    #adding my offsets
+                    if clickedTile==(6,1):
+                        xOffset=50
+                    elif clickedTile ==(7,4):
+                        xOffset=-50
+                    elif clickedTile==(6,4):
+                        xOffset=50
+                    elif clickedTile==(7,1):
+                        xOffset=-40
+                    elif clickedTile==(1,1):
+                        xOffset= 40
+                        yOffset=5
+                    elif clickedTile==(3,2):
+                        xOffset=30
+                        yOffset=-35
+                    elif clickedTile==(4,4):
+                        xOffset=-34
+                        yOffset=15
+                    elif clickedTile==(2,5):
+                        xOffset=-30
+                        yOffset=20
+                    elif clickedTile==(5,0):
+                        xOffset=-10
+                        yOffset=+10
+
+
+                    if selectedTower == 'archer tower':
+                        tower = Towers(archerTowerImage, tilex + xOffset, tiley + yOffset, arrowImage)
+                        towerGroup.add(tower)
+                        takenTiles.append(clickedTile)
+                    elif selectedTower == 'wizard tower':
+                        tower = Towers(wizardTowerImage, tilex + xOffset, tiley + yOffset, arrowImage)
+                        towerGroup.add(tower)
+                        takenTiles.append(clickedTile)
+                    elif selectedTower == 'knight tower':
+                        tower = Towers(knightTowerImage, tilex + xOffset, tiley + yOffset, arrowImage)
+                        towerGroup.add(tower)
+                        takenTiles.append(clickedTile)
+                        towerMenuOpen = False
+                    selectedTower=None
+
+
+
+
+            #obstructed tower placement menu
+                if clickedTile in obstructedTiles:
+                    remove = obstructionRemovalMenu(screen, font)
+                    if remove == 'remove':
+                        obstructedTiles.remove(clickedTile)
+                        towerTiles.append(clickedTile)
+                        pygame.display.update()
+
+
+
+        #townManagement events
+        if gameState==townManagement:
+            # drawing buton as we need it to do checks
+            buildingButton = pygame.draw.rect(screen, (0, 0, 255), [700, 560, 80, 30], 0, 5)
+            if event.type == pygame.MOUSEBUTTONDOWN and event.button == 1:
+                mousePos=pygame.mouse.get_pos()
+                #checking if the build button was clicked
+                if buildingButton.collidepoint(mousePos):
+                    buildingChoice = buildMenu(screen, font)
+
+                    #player has chosen to place a building
+                    if buildingChoice:
+                        selectedBuilding = buildingChoice
+                        buildingImage = pygame.image.load(f"{selectedBuilding}.png")
+                        placingBuilding = True
+                #conditions for placing the building
+                elif placingBuilding and buildingImage:
+                    newRect = pygame.Rect(mousePos[0] - 50, mousePos[1] - 50, buildingImage.get_width(),
+                                          buildingImage.get_height())
+                    if not checkCollision(newRect, placedBuildings):
+                        placedBuildings.append((buildingImage, newRect))
+                        placingBuilding = False
+                        selectedBuilding = None
+                        buildingImage = None
+
+    #handling state changes
+
+    #state changes for main menu
+    if gameState==mainMenu:
+        menuChoice = drawMenu(screen, font, titleFont)
+        if menuChoice == 'start':
+            gameState=towerDefence  #changing the game state to tower defence
+        elif menuChoice == 'quit':
+            run = False
+        elif menuChoice == 'help':
+            helpScreen()
+    elif gameState==towerDefence:
+        lastSpawn = drawGame(enemyGroup, screen, northMap, wayPoints, goblinImage, lastSpawn, waves, townEntrance,
+                             towerGroup)
+        #drawing town button
+        townButton = drawTownButton(screen, font)
+
+        if townButton == 'town': #checking if town button has been pressed
+            gameState = townManagement
+        #drawing the obstructions
+        for obstruction in obstructedTiles:
+            if obstruction[0] == 3 and obstruction[1] == 2:
+                x = obstruction[0] * 100
+                y = obstruction[1] * 100
+                screen.blit(treeImage, (x + 30, y - 50))
+            elif obstruction[0] == 4 and obstruction[1] == 4:
+                x = obstruction[0] * 100
+                y = obstruction[1] * 100
+                screen.blit(treeImage, (x - 34, y + 10))
+            elif obstruction[0] == 2 and obstruction[1] == 5:
+                x = obstruction[0] * 100
+                y = obstruction[1] * 100
+                screen.blit(treeImage, (x - 30, y))
+            elif obstruction[0] == 1 and obstruction[1] == 1:
+                x = obstruction[0] * 100
+                y = obstruction[1] * 100
+                screen.blit(treeImage, (x + 40, y - 10))
+            elif obstruction[0] == 5 and obstruction[1] == 0:
+                x = obstruction[0] * 100
+                y = obstruction[1] * 100
+                screen.blit(treeImage, (x - 10, y - 10))
+        #drawing projectiles
+        for tower in towerGroup:
+            tower.shooting(enemyGroup.sprites(), projectileGroup, arrowImage)
+            projectileGroup.draw(screen)
+            projectileGroup.update()
+            #enemy health
+            hits = pygame.sprite.groupcollide(enemyGroup, projectileGroup, False, True)
+            for enemy, arrows in hits.items():
+                for arrow in arrows:
+                    aliveCheck = enemy.takeDamage(10)
+
+
+    #handling town management drawing
+    elif gameState==townManagement:
+        screen.blit(townImage, (0, 0))
+        buildingButton = pygame.draw.rect(screen, (0, 0, 255), [700, 560, 80, 30], 0, 5)
+        buildingText = font.render('Build', True, (0, 0, 0))
+        screen.blit(buildingText, (700, 560))
+        for img, pos in placedBuildings:
+            screen.blit(img, pos)
+        if placingBuilding and buildingImage:
+            mousePos = pygame.mouse.get_pos()
+            screen.blit(buildingImage, (mousePos[0] - 50, mousePos[1] - 50))
+    pygame.display.flip()
+    pygame.time.delay(10)
+
+pygame.quit()
+
