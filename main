@@ -1,7 +1,7 @@
-import pygame
+#import pygame
+import pygame.display
 from subroutines import * #importing everything from the subroutines file
 from enemeis import * #importing everything from enemies file
-import time
 
 # Main code
 
@@ -22,7 +22,7 @@ wayPoints = [(0,300),(400, 300),(700,300),(750,300)]
 goblinImage= pygame.image.load('goblin1.png')
 
 # waves for the enemeis to spawn
-waves = [['g']]
+waves = [['g','g']]
 
 #creating groups
 enemyGroup=pygame.sprite.Group() #Group for enemies
@@ -66,18 +66,28 @@ buildingImage = None
 placingBuilding = False
 placedBuildings = []
 
-
+goldMineNum=0
+labNum=0
+goldStorage=0
+elixirStorage=0
 #game state's
 towerDefence=1
 townManagement=2
 mainMenu=3
 gameState=mainMenu
+upgradeMenuOpen=False
+menuButtons=None
+
+#player currencys
+player=Player()
+
 
 #main game loop
 while run:
     screen.fill((255, 255, 255))  # fills the screen with white
     time.tick(fps)                # setting frame rate
-
+    player.addGold(goldMineNum)
+    player.addElixir(labNum)
     #event loop
     events = pygame.event.get()
     for event in  events:  #making the X work on window
@@ -160,12 +170,29 @@ while run:
 
 
 
+
         #townManagement events
         if gameState==townManagement:
+
             # drawing buton as we need it to do checks
             buildingButton = pygame.draw.rect(screen, (0, 0, 255), [700, 560, 80, 30], 0, 5)
             if event.type == pygame.MOUSEBUTTONDOWN and event.button == 1:
                 mousePos=pygame.mouse.get_pos()
+
+                if upgradeMenuOpen and menuButtons:
+                    if menuButtons["upgrade"].collidepoint(mousePos):
+                        print("Upgrade selected")
+                    elif menuButtons["quit"].collidepoint(mousePos):
+                        print("Quit selected")
+                        upgradeMenuOpen = False
+                else:
+                    for building,rect in placedBuildings:
+                        if rect.collidepoint((mousePos)):
+                            upgradeChoice=building
+                            print(f"Clicked on {building}")
+                            upgradeMenuOpen=True
+                        break
+
                 #checking if the build button was clicked
                 if buildingButton.collidepoint(mousePos):
                     buildingChoice = buildMenu(screen, font)
@@ -174,18 +201,36 @@ while run:
                     if buildingChoice:
                         selectedBuilding = buildingChoice
                         buildingImage = pygame.image.load(f"{selectedBuilding}.png")
+
+
                         placingBuilding = True
                 #conditions for placing the building
                 elif placingBuilding and buildingImage:
                     newRect = pygame.Rect(mousePos[0] - 50, mousePos[1] - 50, buildingImage.get_width(),
                                           buildingImage.get_height())
+                    #counting gold mines
+                    if selectedBuilding == 'gold mine':
+                        goldMineNum += 1
+                        #counting labs
+                    elif selectedBuilding == 'Lab':
+                        labNum += 1
+
+                    # checking if building is storage
+                    if selectedBuilding == 'Gold Storage':
+                        player.increaseGoldStorage()
+                    if selectedBuilding == 'Elixir Storage':
+                        player.increaseElixirStorage()
+
                     if not checkCollision(newRect, placedBuildings):
                         placedBuildings.append((buildingImage, newRect))
                         placingBuilding = False
                         selectedBuilding = None
                         buildingImage = None
 
+
     #handling state changes
+    if upgradeMenuOpen:
+        menuButtons=buildingUpgradeMenu(screen, font)
 
     #state changes for main menu
     if gameState==mainMenu:
@@ -199,10 +244,11 @@ while run:
     elif gameState==towerDefence:
         lastSpawn = drawGame(enemyGroup, screen, northMap, wayPoints, goblinImage, lastSpawn, waves, townEntrance,
                              towerGroup)
+        player.drawCurrency(screen, font) #drawing currencies
         #drawing town button
         townButton = drawTownButton(screen, font)
 
-        if townButton == 'town': #checking if town button has been pressed
+        if townButton.collidepoint(pygame.mouse.get_pos()) and pygame.mouse.get_pressed()[0]: #checking if town button has been pressed
             gameState = townManagement
         #drawing the obstructions
         for obstruction in obstructedTiles:
@@ -244,6 +290,18 @@ while run:
         buildingButton = pygame.draw.rect(screen, (0, 0, 255), [700, 560, 80, 30], 0, 5)
         buildingText = font.render('Build', True, (0, 0, 0))
         screen.blit(buildingText, (700, 560))
+        player.drawCurrency(screen, font)
+        # checking if building was placed:
+
+
+        #tower button
+        battleButton=drawBattleButton(screen, font) #draws the tower button on town side
+        #checks if the player wants to go back to battle
+
+        if battleButton.collidepoint(pygame.mouse.get_pos()) and pygame.mouse.get_pressed()[0]:
+            gameState=towerDefence
+
+
         for img, pos in placedBuildings:
             screen.blit(img, pos)
         if placingBuilding and buildingImage:
